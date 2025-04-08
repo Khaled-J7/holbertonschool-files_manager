@@ -1,5 +1,4 @@
-import pkg from 'mongodb';
-const { MongoClient } = pkg;
+import { MongoClient } from 'mongodb';
 
 class DBClient {
   constructor() {
@@ -7,70 +6,55 @@ class DBClient {
     this.port = process.env.DB_PORT || 27017;
     this.database = process.env.DB_DATABASE || 'files_manager';
     const uri = `mongodb://${this.host}:${this.port}`;
-    this.client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
+    this.client = new MongoClient(uri, { useUnifiedTopology: true });
     this.db = null;
+    this.connected = false;
+    
+    // Try to connect immediately
+    this.connectToMongo().catch((error) => {
+      console.error('Initial MongoDB connection failed:', error.message);
+    });
   }
 
-  async connect() {
+  async connectToMongo() {
     try {
       await this.client.connect();
       this.db = this.client.db(this.database);
-      console.log('Connected to MongoDB');
-      return true;
-    } catch (err) {
-      console.error('Failed to connect to MongoDB:', err);
-      return false;
-    }
-  }
-
-
-  async isAlive() {
-    if (this.db === null) {
-      const connectionSuccess = await this.connect();
-      if (!connectionSuccess) {
-        return false;
-      }
-    }
-
-    try {
-      await this.db.command({ ping: 1 });
+      this.connected = true;
       return true;
     } catch (error) {
-
-      console.error('Error pinging MongoDB:', error);
+      this.connected = false;
       return false;
     }
   }
 
+  isAlive() {
+    // Return boolean directly, not a Promise
+    return this.connected;
+  }
 
   async nbUsers() {
-    if (this.db === null) {
-      const connectionSuccess = await this.connect();
-      if (!connectionSuccess) return 0; // Return 0 if connection fails
+    if (!this.isAlive()) {
+      return 0;
     }
-
     try {
-      const usersCollection = this.db.collection('users');
-      const count = await usersCollection.countDocuments();
+      const count = await this.db.collection('users').countDocuments();
       return count;
-    } catch (err) {
-      console.error('Failed to get user count:', err);
+    } catch (error) {
+      console.error('Error counting users:', error.message);
       return 0;
     }
   }
 
   async nbFiles() {
-    if (this.db === null) {
-      const connectionSuccess = await this.connect();
-      if (!connectionSuccess) return 0; // Return 0 if connection fails
+    if (!this.isAlive()) {
+      return 0;
     }
-
     try {
-      const filesCollection = this.db.collection('files');
-      const count = await filesCollection.countDocuments();
+      const count = await this.db.collection('files').countDocuments();
       return count;
-    } catch (err) {
-      console.error('Failed to get file count:', err);
+    } catch (error) {
+      console.error('Error counting files:', error.message);
       return 0;
     }
   }
