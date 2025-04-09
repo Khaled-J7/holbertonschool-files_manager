@@ -1,3 +1,4 @@
+// utils/db.mjs (modified version with safer methods)
 import mongodb from 'mongodb';
 
 const { MongoClient } = mongodb;
@@ -26,13 +27,29 @@ class DBClient {
   }
 
   async nbUsers() {
-    const userCount = this.users.countDocuments();
-    return userCount;
+    if (!this.isAlive() || !this.users) {
+      return 0;
+    }
+    try {
+      const userCount = await this.users.countDocuments();
+      return userCount;
+    } catch (error) {
+      console.error('Error counting users:', error.message);
+      return 0;
+    }
   }
 
   async nbFiles() {
-    const fileCount = this.files.countDocuments();
-    return fileCount;
+    if (!this.isAlive() || !this.files) {
+      return 0;
+    }
+    try {
+      const fileCount = await this.files.countDocuments();
+      return fileCount;
+    } catch (error) {
+      console.error('Error counting files:', error.message);
+      return 0;
+    }
   }
 }
 
