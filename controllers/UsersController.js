@@ -5,10 +5,10 @@ import dbClient from '../utils/db';
 class UsersController {
   /**
    * Creates a new user in the database
-   * 
+   *
    * This endpoint handles user registration with validation for required fields
    * and uniqueness checks for email. Passwords are securely hashed using SHA1.
-   * 
+   *
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    * @returns {Object} - JSON response with user data or error message
@@ -21,7 +21,7 @@ class UsersController {
     if (!email) {
       return res.status(400).json({ error: 'Missing email' });
     }
-    
+
     if (!password) {
       return res.status(400).json({ error: 'Missing password' });
     }
@@ -29,7 +29,7 @@ class UsersController {
     // Check if user already exists
     try {
       const existingUser = await dbClient.db.collection('users').findOne({ email });
-      
+
       if (existingUser) {
         return res.status(400).json({ error: 'Already exist' });
       }
