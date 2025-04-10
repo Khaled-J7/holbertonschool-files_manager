@@ -1,10 +1,10 @@
 // routes/index.js
-import express from "express";
-import AppController from "../controllers/AppController";
+import express from 'express';
+import AppController from '../controllers/AppController';
 import UsersController from '../controllers/UsersController';
 import AuthController from '../controllers/AuthController';
+import FilesController from '../controllers/FilesController';
 
-// Create Router instance
 const router = express.Router();
 
 // App status and stats
@@ -18,5 +18,8 @@ router.get('/users/me', UsersController.getMe);
 // Authentication routes
 router.get('/connect', AuthController.getConnect);
 router.get('/disconnect', AuthController.getDisconnect);
+
+// Files routes
+router.post('/files', FilesController.postUpload);
 
 export default router;
