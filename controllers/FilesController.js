@@ -9,15 +9,15 @@ import dbClient from '../utils/db';
 class FilesController {
   /**
    * Uploads a new file or creates a new folder
-   * 
+   *
    * This endpoint handles the creation of three types of items:
    * 1. Folders - organizational units in the database
    * 2. Files - text or binary files stored on disk
    * 3. Images - specialized files specifically marked as images
-   * 
+   *
    * Files and images are stored both in the database (metadata)
    * and on disk (content), while folders exist only in the database.
-   * 
+   *
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    * @returns {Object} - JSON response with new file data or error message
@@ -101,7 +101,7 @@ class FilesController {
     // For files and images, store the content on disk
     // Get the storage folder path
     const folderPath = process.env.FOLDER_PATH || '/tmp/files_manager';
-    
+
     // Create the storage folder if it doesn't exist
     try {
       if (!fs.existsSync(folderPath)) {
@@ -140,6 +140,125 @@ class FilesController {
       isPublic,
       parentId,
     });
+  }
+
+  /**
+   * Retrieves a single file by ID
+   *
+   * This endpoint returns detailed information about a specific file,
+   * including its name, type, parent folder, and visibility settings.
+   * Users can only access files they own or files marked as public.
+   *
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @returns {Object} - JSON response with file data or error message
+   */
+  static async getShow(req, res) {
+    // Retrieve the token from request headers
+    const token = req.headers['x-token'];
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Get user ID from Redis using token
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Extract file ID from request parameters
+    const fileId = req.params.id;
+
+    // Find the file in the database
+    let file;
+    try {
+      file = await dbClient.db.collection('files').findOne({
+        _id: ObjectId(fileId),
+        userId: ObjectId(userId),
+      });
+    } catch (error) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // If file not found, return error
+    if (!file) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // Return the file information
+    return res.status(200).json({
+      id: file._id.toString(),
+      userId: file.userId.toString(),
+      name: file.name,
+      type: file.type,
+      isPublic: file.isPublic,
+      parentId: file.parentId,
+    });
+  }
+
+  /**
+   * Lists files with pagination
+   *
+   * This endpoint returns a paginated list of files for the authenticated user,
+   * optionally filtered by a parent folder ID. It implements server-side
+   * pagination to efficiently handle large file collections.
+   *
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @returns {Array} - JSON array of file data objects or error message
+   */
+  static async getIndex(req, res) {
+    // Retrieve the token from request headers
+    const token = req.headers['x-token'];
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Get user ID from Redis using token
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Extract pagination and filtering parameters
+    const parentId = req.query.parentId || 0;
+    const page = parseInt(req.query.page || 0, 10);
+
+    // Calculate pagination offset (20 items per page)
+    const pageSize = 20;
+    const skip = page * pageSize;
+
+    // Build the query for finding files
+    const query = {
+      userId: ObjectId(userId),
+    };
+
+    // Add parentId filter if it's not the root (0)
+    if (parentId !== 0) {
+      query.parentId = parentId;
+    }
+
+    // Fetch paginated files from the database
+    const files = await dbClient.db.collection('files')
+      .find(query)
+      .skip(skip)
+      .limit(pageSize)
+      .toArray();
+
+    // Transform the results for the response
+    const filesWithStringIds = files.map((file) => ({
+      id: file._id.toString(),
+      userId: file.userId.toString(),
+      name: file.name,
+      type: file.type,
+      isPublic: file.isPublic,
+      parentId: file.parentId,
+    }));
+
+    // Return the list of files
+    return res.status(200).json(filesWithStringIds);
   }
 }
 
