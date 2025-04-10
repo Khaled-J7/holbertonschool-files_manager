@@ -51,6 +51,52 @@ class UsersController {
       return res.status(500).json({ error: 'Internal server error' });
     }
   }
+
+  // Add this method to your existing UsersController class
+  /**
+   * Retrieves the current user's profile
+   *
+   * Identifies the user based on their authentication token and
+   * returns their profile information (email and ID).
+   *
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @returns {Object} - JSON response with user data or error
+   */
+  static async getMe(req, res) {
+    // Get token from X-Token header
+    const token = req.headers['x-token'];
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Get user ID from Redis
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Find user in database
+    try {
+      const user = await dbClient.db.collection('users')
+        .findOne({ _id: new require('mongodb').ObjectId(userId) });
+
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Return user information (email and ID only)
+      return res.status(200).json({
+        id: userId,
+        email: user.email,
+      });
+    } catch (error) {
+      console.error('Error retrieving user:', error.message);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
 }
 
 export default UsersController;
