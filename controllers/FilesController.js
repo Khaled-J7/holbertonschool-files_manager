@@ -5,6 +5,7 @@ import path from 'path';
 import { ObjectId } from 'mongodb';
 import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
+import mime from 'mime-types';
 
 class FilesController {
   /**
@@ -379,6 +380,76 @@ class FilesController {
       isPublic: file.isPublic,
       parentId: file.parentId,
     });
+  }
+
+  /**
+   * Retrieves the content of a file
+   *
+   * This endpoint returns the actual content of a file, with the appropriate MIME type.
+   * It includes access control checks to ensure only public files or files owned by
+   * the authenticated user are accessible.
+   *
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @returns {Stream} - File content with appropriate MIME type
+   */
+  static async getFile(req, res) {
+    // Extract file ID from request parameters
+    const fileId = req.params.id;
+
+    // Find the file in the database, regardless of owner
+    let file;
+    try {
+      file = await dbClient.db.collection('files').findOne({
+        _id: ObjectId(fileId)
+      });
+    } catch (error) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // If file not found, return error
+    if (!file) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // Check permissions - file must be public or owned by authenticated user
+    if (!file.isPublic) {
+      // Get token from headers
+      const token = req.headers['x-token'];
+      if (!token) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Get user ID from Redis
+      const key = `auth_${token}`;
+      const userId = await redisClient.get(key);
+      if (!userId) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Check if user is the owner of the file
+      if (file.userId.toString() !== userId) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+    }
+
+    // If the file is a folder, return an error
+    if (file.type === 'folder') {
+      return res.status(400).json({ error: "A folder doesn't have content" });
+    }
+
+    // Check if the file exists on disk
+    if (!file.localPath || !fs.existsSync(file.localPath)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // Determine the MIME type based on the file name
+    const mimeType = mime.lookup(file.name) || 'application/octet-stream';
+
+    // Read and return the file content with the correct MIME type
+    const fileContent = fs.readFileSync(file.localPath);
+    res.setHeader('Content-Type', mimeType);
+    return res.send(fileContent);
   }
 }
 
