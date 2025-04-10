@@ -260,6 +260,126 @@ class FilesController {
     // Return the list of files
     return res.status(200).json(filesWithStringIds);
   }
+
+
+  /**
+   * Makes a file public
+   *
+   * This endpoint updates a file's visibility to public, allowing it
+   * to be accessed by users other than the owner. Only the file owner
+   * can publish their files.
+   *
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @returns {Object} - JSON response with updated file data or error message
+   */
+  static async putPublish(req, res) {
+    // Retrieve the token from request headers
+    const token = req.headers['x-token'];
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Get user ID from Redis using token
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Extract file ID from request parameters
+    const fileId = req.params.id;
+
+    // Find the file in the database
+    let file;
+    try {
+      // Find the file and update its isPublic status in one operation
+      file = await dbClient.db.collection('files').findOneAndUpdate(
+        { _id: ObjectId(fileId), userId: ObjectId(userId) },
+        { $set: { isPublic: true } },
+        { returnDocument: 'after' } // Return the updated document
+      );
+
+      // Extract the updated file from the result
+      file = file.value;
+    } catch (error) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // If file not found, return error
+    if (!file) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // Return the updated file information
+    return res.status(200).json({
+      id: file._id.toString(),
+      userId: file.userId.toString(),
+      name: file.name,
+      type: file.type,
+      isPublic: file.isPublic,
+      parentId: file.parentId,
+    });
+  }
+
+  /**
+   * Makes a file private
+   *
+   * This endpoint updates a file's visibility to private, restricting
+   * access to only the owner. Only the file owner can unpublish their files.
+   *
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @returns {Object} - JSON response with updated file data or error message
+   */
+  static async putUnpublish(req, res) {
+    // Retrieve the token from request headers
+    const token = req.headers['x-token'];
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Get user ID from Redis using token
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Extract file ID from request parameters
+    const fileId = req.params.id;
+
+    // Find the file in the database
+    let file;
+    try {
+      // Find the file and update its isPublic status in one operation
+      file = await dbClient.db.collection('files').findOneAndUpdate(
+        { _id: ObjectId(fileId), userId: ObjectId(userId) },
+        { $set: { isPublic: false } },
+        { returnDocument: 'after' } // Return the updated document
+      );
+
+      // Extract the updated file from the result
+      file = file.value;
+    } catch (error) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // If file not found, return error
+    if (!file) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // Return the updated file information
+    return res.status(200).json({
+      id: file._id.toString(),
+      userId: file.userId.toString(),
+      name: file.name,
+      type: file.type,
+      isPublic: file.isPublic,
+      parentId: file.parentId,
+    });
+  }
 }
 
 export default FilesController;
